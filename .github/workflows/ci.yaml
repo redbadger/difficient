@@ -19,4 +19,6 @@ jobs:
 
       - name: Test with all features
         run: cargo test --workspace --features uuid,chrono,visitor
-             cargo run --example visitor --features visitor
+
+      - name: Run example
+        run: cargo run --example visitor --features visitor
