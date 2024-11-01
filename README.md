@@ -1,5 +1,5 @@
 # Difficient
-Efficient, type-safe, (almost) zero-allocation diffing.
+Efficient, type-safe, (almost) zero-allocation structural diffing.
 
 * Annotate your `struct` or `enum` with `#[derive(Diffable)]`
 * Under the hood, a new type `MyTypeDiff
