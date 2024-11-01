@@ -1,0 +1,22 @@
+[lib]
+proc-macro = true
+
+[package]
+name = "difficient-macros"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+darling = "0.20.10"
+heck = "0.5.0"
+proc-macro2 = "1.0.86"
+quote = "1.0.36"
+syn = "2.0.72"
+
+[features]
+serde_impl = []
+visitor_impl = ["serde_impl"]
+
+[dev-dependencies]
+pretty_assertions = "1.4.0"
+prettyplease = "0.2.20"

@@ -1,0 +1,26 @@
+[workspace]
+members = ["difficient-macros"]
+
+[package]
+name = "difficient"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4", optional = true }
+difficient-macros = { path = "difficient-macros" }
+serde = { version = "1.0", features = ["derive"], optional = true }
+similar = "2.6.0"
+thiserror = "1.0"
+uuid = { version = "1.11", optional = true }
+
+[features]
+chrono = ["dep:chrono"]   # impl Diffable on `chrono::DateTime`
+uuid = ["dep:uuid"]       # impl Diffable on `uuid::Uuid`
+serde = ["dep:serde"]     # add serde derives to derived structs
+visitor = ["serde", "difficient-macros/visitor_impl"] # add AcceptVisitor impl
+
+[dev-dependencies]
+pretty_assertions = "1.4.0"
+rand = "0.8.5"
+serde_json = "1.0.122"
