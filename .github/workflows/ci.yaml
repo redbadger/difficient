@@ -17,8 +17,11 @@ jobs:
       - name: Test with serde
         run: cargo test --workspace --features serde
 
-      - name: Test with all features
+      - name: Test with features
         run: cargo test --workspace --features uuid,chrono,visitor
+
+      - name: Test with myers diff algo
+        run: cargo test --workspace --no-default-features --features vec_diff_myers
 
       - name: Run example
         run: cargo run --example visitor --features visitor

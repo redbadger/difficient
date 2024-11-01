@@ -20,6 +20,12 @@ uuid = ["dep:uuid"]      # impl Diffable on `uuid::Uuid`
 serde = ["dep:serde", "difficient-macros/serde_impl"]    # add serde derives to derived structs
 visitor = ["serde", "difficient-macros/visitor_impl"] # add AcceptVisitor impl
 
+# choose your vec diff algo
+vec_diff_myers = []   # is generally more efficient
+vec_diff_lcs = []     # can result in smaller diffs in certain circumstances
+
+default = ["vec_diff_lcs"]
+
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 rand = "0.8.5"

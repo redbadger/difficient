@@ -1,16 +1,8 @@
-// We chose to use `lcs` over `myers` because it can result in smaller changes
-// when rearranging concepts.
-//
-// When a concept is rearranged, both its `z_index` and its position in the
-// `concepts` vector changes. Ideally, we would minimize the resulting changes
-// such that we remove the rearranged concept from the vector, and reinsert it
-// with its updated `z_index` in the new position. Unfortunately, sometimes the
-// diffing algorithm decides upon a different set of changes: It would remove
-// a non-rearranged concept and place it into a new position to swap places with
-// the rearranged one. And then it also needs a separate `Patch` to update the
-// `z_index` of the concept that was actually rearranged. This behavior still
-// happens sometimes, but is minimized by using `lcs` instead of `myers`.
+#[cfg(feature = "vec_diff_lcs")]
 use similar::algorithms::lcs as diff_algo;
+
+#[cfg(feature = "vec_diff_myers")]
+use similar::algorithms::myers as diff_algo;
 
 use similar::algorithms::{Capture, Compact, Replace as SimilarReplace};
 
