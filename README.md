@@ -2,7 +2,6 @@
 Efficient, type-safe, (almost) zero-allocation structural diffing.
 
 * Annotate your `struct` or `enum` with `#[derive(Diffable)]`
-* Under the hood, a new type `MyTypeDiff
 * Diff your value with another value of the same type
 * Apply the diff! 
 * Serialize the diff!
