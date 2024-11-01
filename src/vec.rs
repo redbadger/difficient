@@ -117,7 +117,7 @@ mod serde_impls {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "visitor", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum VecChange<'a, T, U> {
     Remove {
         at_index: usize,
