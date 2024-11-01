@@ -215,6 +215,7 @@ impl DeriveDiffable {
                     vis,
                     serde_derive,
                     serde_container_rename_all,
+                    derive_visitor,
                 )
             }
         }
@@ -485,6 +486,7 @@ fn struct_impl(
     vis: &syn::Visibility,
     serde_derive: Option<TokenStream>,
     serde_rename_all: Option<SerdeRenameAllCase>,
+    derive_visitor: bool,
 ) -> TokenStream {
     let ty = fields.iter().map(|data| &data.ty).collect::<Vec<_>>();
     let num_skipped_fields = fields.iter().filter(|f| f.skip).count();
@@ -672,7 +674,7 @@ fn struct_impl(
         }
     };
 
-    let visitor_impl = serde_derive.is_some().then(|| {
+    let visitor_impl = derive_visitor.then(|| {
         quote! {
             impl<'a> difficient::AcceptVisitor for #diff_ty <'a> {
                 fn accept<V: difficient::Visitor>(&self, visitor: &mut V) {

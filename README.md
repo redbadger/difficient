@@ -90,3 +90,15 @@ assert!(diff.is_unchanged());  // unchanged because `c` is ignored
 With the `visitor` feature activated, we can generate a series of discrete changes from the `Diff` type.
 
 See `examples/visitor.rs` for a worked example.
+
+
+## Efficient?
+
+The diff function does not allocate, in most cases. This makes it extremely fast.
+
+The exceptions are
+
+* when dealing with boxed types
+* when dealing collections (`Vec`, `HashMap` or `BTreeMap`)
+
+Then it _may_ have to allocate, which makes it merely very fast.

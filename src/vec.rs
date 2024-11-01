@@ -62,7 +62,7 @@ impl DiffKey for String {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "visitor", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum VecDiff<'a, T, U> {
     Unchanged,
     Replaced(&'a [T]),
@@ -70,7 +70,7 @@ pub enum VecDiff<'a, T, U> {
 }
 
 #[cfg(feature = "visitor")]
-mod serde_impls {
+mod visitor_impls {
     use crate::{AcceptVisitor, Enter, VecChange, VecDiff};
 
     impl<'a, T, U> AcceptVisitor for VecDiff<'a, T, U>

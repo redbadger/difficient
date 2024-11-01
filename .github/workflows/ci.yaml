@@ -1,0 +1,22 @@
+on: [push, pull_request]
+
+name: CI
+
+jobs:
+  build:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Test with serde
+        run: cargo test --workspace --features serde
+
+      - name: Test with all features
+        run: cargo test --workspace --features uuid,chrono,visitor
+             cargo run --example visitor --features visitor
