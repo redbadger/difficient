@@ -9,10 +9,9 @@ struct SimpleStruct {
     y: i32,
 }
 
-#[allow(clippy::type_complexity)]
 #[derive(difficient::Diffable, PartialEq, Debug, Clone)]
 struct StrangeStruct {
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity, reason = "test")]
     r#try: Option<Box<(u32, (&'static str, Box<u64>))>>,
 }
 
@@ -58,7 +57,26 @@ enum EnumContainsAtomicAndSkip {
     },
 }
 
-#[allow(dead_code)]
+#[derive(difficient::Diffable, PartialEq, Debug, Clone)]
+struct SingleFieldA {
+    a: SingleFieldB,
+}
+
+#[derive(difficient::Diffable, PartialEq, Debug, Clone)]
+struct SingleFieldB {
+    b: SingleFieldC,
+}
+
+#[derive(difficient::Diffable, PartialEq, Debug, Clone)]
+struct SingleFieldC {
+    c: u32,
+}
+
+#[expect(dead_code, reason = "test")]
+#[expect(
+    clippy::empty_structs_with_brackets,
+    reason = "We are specifically testing this behavior"
+)]
 mod just_check_they_compile {
     use std::collections::{BTreeMap, HashMap};
 
@@ -83,17 +101,19 @@ mod just_check_they_compile {
     }
 
     #[derive(difficient::Diffable, PartialEq, Debug, Clone)]
-    #[allow(non_camel_case_types)]
-    #[allow(non_snake_case)]
-    #[allow(clippy::upper_case_acronyms)]
+    #[expect(
+        non_camel_case_types,
+        non_snake_case,
+        clippy::upper_case_acronyms,
+        reason = "test"
+    )]
     enum dumb_Enum_noWarnings {
         lowercase { UPPERCASE: i32 },
         UPPERCASE { lowercase: i32 },
     }
 
     #[derive(difficient::Diffable, PartialEq, Debug, Clone)]
-    #[allow(non_snake_case)]
-    #[allow(non_camel_case_types)]
+    #[expect(non_snake_case, non_camel_case_types, reason = "test")]
     struct dumb_Struct_noWarnings {
         UPPERCASE: i32,
         camelCase: i32,
@@ -118,15 +138,21 @@ mod just_check_they_compile {
         x: NotDiffable,
         y: NotDiffable,
     }
+
+    #[derive(difficient::Diffable, PartialEq, Debug, Clone)]
+    #[diffable(visit_transparent)]
+    struct SeeThrough {
+        x: u32,
+    }
 }
 
 // **** Derive tests
 mod tests {
-    use super::*;
+    use difficient::{AtomicDiff, DiffKey, Diffable, PatchOnlyDiff};
     use pretty_assertions::assert_eq;
-
-    use difficient::{DiffKey, Diffable};
     use rand::Rng;
+
+    use super::*;
 
     #[test]
     fn test_simple_struct() {
@@ -225,28 +251,28 @@ mod tests {
     fn test_atomic_and_skip_enum() {
         // we are really just checking things compile and run here
         let mut c1 = EnumContainsAtomicAndSkip::First;
-        let c2a = EnumContainsAtomicAndSkip::Second(Vec::new(), 123);
-        let c2b = EnumContainsAtomicAndSkip::Second(vec![Unit, Unit], 123);
-        let c3a = EnumContainsAtomicAndSkip::Third {
+        let c2_one = EnumContainsAtomicAndSkip::Second(Vec::new(), 123);
+        let c2_two = EnumContainsAtomicAndSkip::Second(vec![Unit, Unit], 123);
+        let c3_one = EnumContainsAtomicAndSkip::Third {
             w: vec![Unit],
             x: 321,
             y: NotDiffable::X,
             z: 654,
         };
-        let c3b = EnumContainsAtomicAndSkip::Third {
+        let c3_two = EnumContainsAtomicAndSkip::Third {
             w: vec![Unit, Unit, Unit],
             x: 321,
             y: NotDiffable::Y,
             z: 987,
         };
-        for item in &[c2a, c2b, c3a] {
+        for item in &[c2_one, c2_two, c3_one] {
             let diff = c1.diff(item);
             c1.apply(&diff).unwrap();
             assert_eq!(&c1, item);
         }
 
         // c3b is special due to NotDiffable
-        let diff = c1.diff(&c3b);
+        let diff = c1.diff(&c3_two);
         c1.apply(&diff).unwrap();
         assert_eq!(
             c1,
@@ -256,7 +282,7 @@ mod tests {
                 y: NotDiffable::X, // has not changed from c3a
                 z: 987
             }
-        )
+        );
     }
 
     #[derive(Clone, Diffable, PartialEq, Eq)]
@@ -374,12 +400,40 @@ mod tests {
             assert_eq!(left, right);
         }
     }
+
+    #[test]
+    fn test_nested_single_field_structs_gives_targeted_patch() {
+        let mut left = SingleFieldA {
+            a: SingleFieldB {
+                b: SingleFieldC { c: 1 },
+            },
+        };
+        let right = SingleFieldA {
+            a: SingleFieldB {
+                b: SingleFieldC { c: 2 },
+            },
+        };
+        let diff = left.diff(&right);
+        assert_eq!(
+            diff,
+            PatchOnlyDiff::Patched(SingleFieldADiff {
+                a: PatchOnlyDiff::Patched(SingleFieldBDiff {
+                    b: PatchOnlyDiff::Patched(SingleFieldCDiff {
+                        c: AtomicDiff::Replaced(&2)
+                    })
+                })
+            })
+        );
+        left.apply(&diff).unwrap();
+        assert_eq!(left, right);
+    }
 }
 
 #[cfg(feature = "serde")]
 mod serde_test {
-    use super::*;
     use difficient::Diffable;
+
+    use super::*;
 
     #[test]
     fn test_serializable() {

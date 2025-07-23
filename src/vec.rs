@@ -2,7 +2,7 @@
 use similar::algorithms::lcs as diff_algo;
 
 #[cfg(feature = "vec_diff_myers")]
-use similar::algorithms::myers as diff_algo;
+use similar::algorithms::lcs as diff_algo;
 
 use similar::algorithms::{Capture, Compact, Replace as SimilarReplace};
 
@@ -65,7 +65,7 @@ pub enum VecDiff<'a, T, U> {
 mod visitor_impls {
     use crate::{AcceptVisitor, Enter, VecChange, VecDiff};
 
-    impl<'a, T, U> AcceptVisitor for VecDiff<'a, T, U>
+    impl<T, U> AcceptVisitor for VecDiff<'_, T, U>
     where
         T: serde::Serialize,
         U: AcceptVisitor,
@@ -82,7 +82,7 @@ mod visitor_impls {
             }
         }
     }
-    impl<'a, T, U> AcceptVisitor for VecChange<'a, T, U>
+    impl<T, U> AcceptVisitor for VecChange<'_, T, U>
     where
         T: serde::Serialize,
         U: AcceptVisitor,
@@ -141,7 +141,7 @@ where
             VecDiff::Unchanged => {}
             VecDiff::Replaced(slice) => *source = slice.to_vec(),
             VecDiff::Changed { changes } => {
-                for change in changes.iter() {
+                for change in changes {
                     match change {
                         VecChange::Remove {
                             at_index: from_index,
@@ -194,13 +194,29 @@ where
             return VecDiff::Unchanged;
         }
         let mut changes = Vec::new();
+        #[expect(
+            clippy::redundant_closure_for_method_calls,
+            reason = "Removing the closure causes a borrow checker error"
+        )]
         let lkeys: Vec<_> = self.iter().map(|v| v.key()).collect();
+        #[expect(
+            clippy::redundant_closure_for_method_calls,
+            reason = "Removing the closure causes a borrow checker error"
+        )]
         let rkeys: Vec<_> = other.iter().map(|v| v.key()).collect();
         let mut d = Compact::new(SimilarReplace::new(Capture::new()), &lkeys, &rkeys);
         diff_algo::diff(&mut d, &lkeys, 0..lkeys.len(), &rkeys, 0..rkeys.len()).unwrap();
         let ops = d.into_inner().into_inner().into_ops();
         let n_ops = ops.len();
         let mut offset = 0isize;
+        #[expect(
+            clippy::cast_sign_loss,
+            reason = "FIXME: it should be possible to change the relative offset to updating absolute base to avoid the possible sign loss"
+        )]
+        #[expect(
+            clippy::cast_possible_wrap,
+            reason = "FIXME: it should be possible to change the relative offset to updating absolute base to avoid the pssible wrap"
+        )]
         for op in ops {
             match op {
                 similar::DiffOp::Equal {
@@ -219,7 +235,7 @@ where
                         changes.push(VecChange::Patch {
                             at_index: new_index + ix,
                             patch: diff,
-                        })
+                        });
                     }
                 }
                 similar::DiffOp::Delete {

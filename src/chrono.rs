@@ -1,5 +1,6 @@
-use crate::{AtomicDiff, Diffable};
 use chrono::DateTime;
+
+use crate::{AtomicDiff, Diffable};
 
 impl<'a, Tz: chrono::TimeZone + 'a> Diffable<'a> for DateTime<Tz> {
     type Diff = AtomicDiff<'a, Self>;
