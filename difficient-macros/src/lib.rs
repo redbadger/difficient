@@ -3,12 +3,12 @@ extern crate proc_macro;
 use std::str::FromStr;
 
 use darling::{
-    ast::{Data, Fields, Style},
     FromDeriveInput, FromField, FromMeta, FromVariant,
+    ast::{Data, Fields, Style},
 };
 use heck::{ToKebabCase, ToLowerCamelCase, ToSnakeCase};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Generics, Ident};
 
 #[derive(Debug, FromField)]
@@ -41,6 +41,8 @@ struct ContainerSerdeAttrs {
     content: Option<String>,
     #[darling(default)]
     untagged: bool,
+    #[darling(default)]
+    transparent: bool,
 }
 
 impl ContainerSerdeAttrs {
@@ -200,24 +202,19 @@ impl DeriveDiffable {
                     serde_derive,
                     serde_container_rename_all,
                     derive_visitor,
-                    self.visit_transparent,
+                    self.visit_transparent || self.serde.transparent,
                 )
             }
-            Data::Struct(fields) => {
-                assert!(
-                    !self.visit_transparent,
-                    "'transparent' annotation only applies to enums"
-                );
-                struct_impl(
-                    fields,
-                    name,
-                    diff_ty,
-                    vis,
-                    serde_derive,
-                    serde_container_rename_all,
-                    derive_visitor,
-                )
-            }
+            Data::Struct(fields) => struct_impl(
+                fields,
+                name,
+                diff_ty,
+                vis,
+                serde_derive,
+                serde_container_rename_all,
+                derive_visitor,
+                self.visit_transparent || self.serde.transparent,
+            ),
         }
     }
 }
@@ -230,7 +227,14 @@ impl ToTokens for DeriveDiffable {
     }
 }
 
-#[allow(clippy::too_many_arguments)] // what nonsense
+#[expect(
+    clippy::too_many_arguments,
+    reason = "TODO Consider refactoring or configuring the lint"
+)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "TODO Consider refactoring or configuring the lint"
+)]
 fn enum_impl(
     variants: &[EnumData],
     variant_tag: SerdeVariantTag,
@@ -296,9 +300,7 @@ fn enum_impl(
 
     let enum_definition = quote! {
         #[derive(Debug, Clone, PartialEq)]
-        #[allow(non_camel_case_types)]
-        #[allow(non_snake_case)]
-        #[allow(dead_code)]
+        #[allow(non_camel_case_types, non_snake_case, dead_code, reason = "Macro")]
         #[automatically_derived]
         #serde_derive
         #vis enum #diff_ty #lifetime {
@@ -323,7 +325,7 @@ fn enum_impl(
         impl<'a> difficient::Diffable<'a> for #name {
             type Diff = difficient::DeepDiff<'a, Self, #diff_ty #lifetime>;
 
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn diff(&self, other: &'a Self) -> Self::Diff {
                 use difficient::Replace as _;
                 match (self, other) {
@@ -382,6 +384,8 @@ fn enum_impl(
                 let position = 0..(var.fields.len());
                 let var_name_str = var_name.to_string();
                 if transparent {
+                    // if tagged with `diffable(visit_transparent)`, we do not emit any
+                    // enter/exit events information and just continue inwards
                     quote! {
                         Self:: #var_name ( #( #ident, )* ) => {
                             #(
@@ -479,6 +483,14 @@ fn enum_impl(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "TODO Consider refactoring or configuring the lint"
+)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "TODO Consider refactoring or configuring the lint"
+)]
 fn struct_impl(
     fields: &Fields<StructLike>,
     name: &Ident,
@@ -487,10 +499,16 @@ fn struct_impl(
     serde_derive: Option<TokenStream>,
     serde_rename_all: Option<SerdeRenameAllCase>,
     derive_visitor: bool,
+    transparent: bool,
 ) -> TokenStream {
     let ty = fields.iter().map(|data| &data.ty).collect::<Vec<_>>();
     let num_skipped_fields = fields.iter().filter(|f| f.skip).count();
     let num_non_skipped_fields = fields.iter().filter(|f| !f.skip).count();
+
+    if transparent && num_non_skipped_fields != 1 {
+        panic!("visit_transparent only makes sense when applied to newtypes")
+    }
+
     if matches!(fields.style, Style::Unit) || num_non_skipped_fields == 0 {
         // short-circuit return
         return quote! {
@@ -571,7 +589,10 @@ fn struct_impl(
         })
         .collect();
 
-    let (struct_diff_type, replaced_impl) = if num_skipped_fields > 0 {
+    // if there is only one field on the struct, we do not allow replacement, only
+    // patching. This is to make the patches as targeted as possible
+    let (struct_diff_type, replaced_impl) = if num_skipped_fields > 0 || num_non_skipped_fields == 1
+    {
         (
             quote! {
                 difficient::PatchOnlyDiff<#diff_ty<'a>>
@@ -595,7 +616,7 @@ fn struct_impl(
         impl<'a> difficient::Diffable<'a> for #name {
             type Diff = #struct_diff_type;
 
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn diff(&self, other: &'a Self) -> Self::Diff {
                 use difficient::Replace as _;
                 #(
@@ -615,7 +636,7 @@ fn struct_impl(
     let apply_impl = quote! {
         impl<'a> difficient::Apply for #diff_ty<'a> {
             type Parent = #name;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn apply_to_base(&self, source: &mut Self::Parent, errs: &mut Vec<difficient::ApplyError>) {
                 #( self.#diff_accessor.apply_to_base(&mut source.#source_accessor, errs); )*
             }
@@ -627,16 +648,30 @@ fn struct_impl(
         match fields.style {
             Style::Tuple => {
                 let position = 0..(fields.len());
-                quote! {
-                    let Self ( #( #ident, )* ) = self;
-                    #(
-                         if !#ident.is_unchanged() {
-                             visitor.enter(difficient::Enter::PositionalField(#position));
-                             #ident.accept(visitor);
-                             visitor.exit();
-                         }
-                    )*
+                if transparent {
+                    // if tagged with `diffable(visit_transparent)`, we do not emit any
+                    // enter/exit events information and just continue inwards
+                    quote! {
+                        let Self ( #( #ident, )* ) = self;
+                        #(
+                             if !#ident.is_unchanged() {
+                                 #ident.accept(visitor);
+                             }
+                        )*
 
+                    }
+                } else {
+                    quote! {
+                        let Self ( #( #ident, )* ) = self;
+                        #(
+                             if !#ident.is_unchanged() {
+                                 visitor.enter(difficient::Enter::PositionalField(#position));
+                                 #ident.accept(visitor);
+                                 visitor.exit();
+                             }
+                        )*
+
+                    }
                 }
             }
             Style::Struct => {
@@ -656,18 +691,32 @@ fn struct_impl(
                     })
                     .collect();
                 assert_eq!(ident_str.len(), serde_rename.len());
-                quote! {
-                    let Self { #( #ident, )* } = self;
-                    #(
-                         if !#ident.is_unchanged() {
-                             visitor.enter(difficient::Enter::NamedField{
-                                 name: #ident_str, serde_rename: #serde_rename
-                             });
-                             #ident.accept(visitor);
-                             visitor.exit();
-                         }
-                    )*
+                if transparent {
+                    // if tagged with `diffable(visit_transparent)`, we do not emit any
+                    // enter/exit events information and just continue inwards
+                    quote! {
+                        let Self { #( #ident, )* } = self;
+                        #(
+                             if !#ident.is_unchanged() {
+                                 #ident.accept(visitor);
+                             }
+                        )*
 
+                    }
+                } else {
+                    quote! {
+                        let Self { #( #ident, )* } = self;
+                        #(
+                             if !#ident.is_unchanged() {
+                                 visitor.enter(difficient::Enter::NamedField{
+                                     name: #ident_str, serde_rename: #serde_rename
+                                 });
+                                 #ident.accept(visitor);
+                                 visitor.exit();
+                             }
+                        )*
+
+                    }
                 }
             }
             Style::Unit => quote! {},
@@ -687,9 +736,7 @@ fn struct_impl(
 
     quote! {
         #[derive(Debug, Clone, PartialEq)]
-        #[allow(non_camel_case_types)]
-        #[allow(non_snake_case)]
-        #[allow(dead_code)]
+        #[allow(non_camel_case_types, non_snake_case, dead_code, reason = "Macro")]
         #[automatically_derived]
         #serde_derive
         #diff_ty_def
@@ -894,9 +941,7 @@ mod tests {
 
         let expect = quote! {
         #[derive(Debug, Clone, PartialEq)]
-        #[allow(non_camel_case_types)]
-        #[allow(non_snake_case)]
-        #[allow(dead_code)]
+        #[allow(non_camel_case_types, non_snake_case, dead_code, reason = "Macro")]
         #[automatically_derived]
         #[derive(serde::Serialize)]
         struct SimpleStructDiff<'a> {
@@ -906,7 +951,7 @@ mod tests {
         }
         impl<'a> difficient::Diffable<'a> for SimpleStruct {
             type Diff = difficient::DeepDiff<'a, Self, SimpleStructDiff<'a>>;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn diff(&self, other: &'a Self) -> Self::Diff {
                 use difficient::Replace as _;
                 let x = self.x.diff(&other.x);
@@ -923,7 +968,7 @@ mod tests {
         }
         impl<'a> difficient::Apply for SimpleStructDiff<'a> {
             type Parent = SimpleStruct;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn apply_to_base(
                 &self,
                 source: &mut Self::Parent,
@@ -997,9 +1042,7 @@ mod tests {
 
         let expect = quote! {
         #[derive(Debug, Clone, PartialEq)]
-        #[allow(non_camel_case_types)]
-        #[allow(non_snake_case)]
-        #[allow(dead_code)]
+        #[allow(non_camel_case_types, non_snake_case, dead_code, reason = "Macro")]
         #[automatically_derived]
         #[derive(serde::Serialize)]
         struct SkipStructDiff<'a> {
@@ -1008,7 +1051,7 @@ mod tests {
         }
         impl<'a> difficient::Diffable<'a> for SkipStruct {
             type Diff = difficient::PatchOnlyDiff<SkipStructDiff<'a>>;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn diff(&self, other: &'a Self) -> Self::Diff {
                 use difficient::Replace as _;
                 let x = self.x.diff(&other.x);
@@ -1024,7 +1067,7 @@ mod tests {
         }
         impl<'a> difficient::Apply for SkipStructDiff<'a> {
             type Parent = SkipStruct;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn apply_to_base(
                 &self,
                 source: &mut Self::Parent,
@@ -1083,9 +1126,7 @@ mod tests {
 
         let expect = quote! {
             #[derive(Debug, Clone, PartialEq)]
-            #[allow(non_camel_case_types)]
-            #[allow(non_snake_case)]
-            #[allow(dead_code)]
+            #[allow(non_camel_case_types, non_snake_case, dead_code,  reason = "Macro")]
             #[automatically_derived]
             #[derive(serde::Serialize)]
             struct TupleStructDiff<'a>(
@@ -1094,7 +1135,7 @@ mod tests {
             );
             impl<'a> difficient::Diffable<'a> for TupleStruct {
                 type Diff = difficient::PatchOnlyDiff<TupleStructDiff<'a>>;
-                #[allow(non_snake_case)]
+                #[allow(non_snake_case, reason = "Macro")]
                 fn diff(&self, other: &'a Self) -> Self::Diff {
                     use difficient::Replace as _;
                     let f0 = self.0.diff(&other.0);
@@ -1110,7 +1151,7 @@ mod tests {
             }
             impl<'a> difficient::Apply for TupleStructDiff<'a> {
                 type Parent = TupleStruct;
-                #[allow(non_snake_case)]
+                #[allow(non_snake_case, reason = "Macro")]
                 fn apply_to_base(
                     &self,
                     source: &mut Self::Parent,
@@ -1173,9 +1214,7 @@ mod tests {
 
         let expect = quote! {
         #[derive(Debug, Clone, PartialEq)]
-        #[allow(non_camel_case_types)]
-        #[allow(non_snake_case)]
-        #[allow(dead_code)]
+        #[allow(non_camel_case_types, non_snake_case, dead_code, reason = "Macro")]
         #[automatically_derived]
         #[derive(serde::Serialize)]
         enum SimpleEnumDiff<'a> {
@@ -1191,7 +1230,7 @@ mod tests {
         }
         impl<'a> difficient::Diffable<'a> for SimpleEnum {
             type Diff = difficient::DeepDiff<'a, Self, SimpleEnumDiff<'a>>;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn diff(&self, other: &'a Self) -> Self::Diff {
                 use difficient::Replace as _;
                 match (self, other) {
@@ -1349,9 +1388,7 @@ mod tests {
 
         let expect = quote! {
         #[derive(Debug, Clone, PartialEq)]
-        #[allow(non_camel_case_types)]
-        #[allow(non_snake_case)]
-        #[allow(dead_code)]
+        #[allow(non_camel_case_types, non_snake_case, dead_code,  reason = "Macro")]
         #[automatically_derived]
         #[derive(serde::Serialize)]
         enum SkipEnumDiff<'a> {
@@ -1363,7 +1400,7 @@ mod tests {
         }
         impl<'a> difficient::Diffable<'a> for SkipEnum {
             type Diff = difficient::DeepDiff<'a, Self, SkipEnumDiff<'a>>;
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "Macro")]
             fn diff(&self, other: &'a Self) -> Self::Diff {
                 use difficient::Replace as _;
                 match (self, other) {
@@ -1517,5 +1554,46 @@ mod tests {
             prettyplease::unparse(&f)
         };
         pretty_assertions::assert_eq!(pretty.to_string(), expect.to_string());
+    }
+
+    #[test]
+    fn test_transparent() {
+        let input = r#"
+        #[derive(Diffable)]
+        #[serde(transparent)]
+        enum SeeThrough {
+            A(X),
+        }
+        "#;
+
+        let parsed = syn::parse_str(input).unwrap();
+        let diff = DeriveDiffable::from_derive_input(&parsed).unwrap();
+
+        let expect = quote! {
+            impl<'a> difficient::AcceptVisitor for SeeThroughDiff<'a> {
+                fn accept<V: difficient::Visitor>(&self, visitor: &mut V) {
+                    use difficient::Replace as _;
+                    match self {
+                        Self::A(f0) => {
+                            if !f0.is_unchanged() {
+                                f0.accept(visitor);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        let pretty = {
+            let derived = diff.derive(true, true);
+            let f: syn::File = syn::parse2(derived).unwrap();
+            prettyplease::unparse(&f)
+        };
+        let expect = {
+            let f: syn::File = syn::parse2(expect).unwrap();
+            prettyplease::unparse(&f)
+        };
+        // if the below assert fails, uncomment:
+        // pretty_assertions::assert_eq!(pretty.to_string(), expect.to_string());
+        assert!(pretty.contains(&expect));
     }
 }

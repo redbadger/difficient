@@ -132,7 +132,7 @@ impl<'a, T: PartialEq> AtomicDiff<'a, T> {
     }
 }
 
-impl<'a, T> Replace for AtomicDiff<'a, T> {
+impl<T> Replace for AtomicDiff<'_, T> {
     fn is_unchanged(&self) -> bool {
         matches!(self, AtomicDiff::Unchanged)
     }
@@ -142,7 +142,7 @@ impl<'a, T> Replace for AtomicDiff<'a, T> {
     }
 }
 
-impl<'a, T> Apply for AtomicDiff<'a, T>
+impl<T> Apply for AtomicDiff<'_, T>
 where
     T: Clone,
 {
@@ -158,7 +158,7 @@ where
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 /// A generic type which can represent three possible 'diff' states.
-/// Appropriate for types which can be 'partially' changed (e.g. structs)
+/// Appropriate for primitive types which can be 'partially' changed (e.g. structs)
 /// c.f. AtomicDiff which cannot represent a `Patched` state
 pub enum DeepDiff<'a, Full, Patch> {
     /// The diffed value is unchanged
@@ -170,7 +170,7 @@ pub enum DeepDiff<'a, Full, Patch> {
     Replaced(&'a Full),
 }
 
-impl<'a, T, U> Replace for DeepDiff<'a, T, U> {
+impl<T, U> Replace for DeepDiff<'_, T, U> {
     fn is_unchanged(&self) -> bool {
         matches!(self, DeepDiff::Unchanged)
     }
@@ -349,7 +349,7 @@ macro_rules! kv_map_impl {
 kv_map_impl!(HashMap, Hash);
 kv_map_impl!(BTreeMap, Ord);
 
-impl<'a> Diffable<'a> for () {
+impl Diffable<'_> for () {
     type Diff = Id<Self>;
 
     fn diff(&self, _: &Self) -> Self::Diff {
@@ -558,7 +558,7 @@ pub mod tests {
         pub val: <String as Diffable<'a>>::Diff,
     }
 
-    impl<'a> Apply for ParentDiff<'a> {
+    impl Apply for ParentDiff<'_> {
         type Parent = Parent;
 
         fn apply_to_base(&self, source: &mut Self::Parent, errs: &mut Vec<ApplyError>) {
@@ -599,7 +599,7 @@ pub mod tests {
         pub y: <String as Diffable<'a>>::Diff,
     }
 
-    impl<'a> Apply for Child1Diff<'a> {
+    impl Apply for Child1Diff<'_> {
         type Parent = Child1;
 
         fn apply_to_base(&self, source: &mut Self::Parent, errs: &mut Vec<ApplyError>) {
@@ -608,7 +608,7 @@ pub mod tests {
         }
     }
 
-    #[allow(clippy::unit_arg)]
+    #[expect(clippy::unit_arg, reason = "test")]
     impl<'a> Diffable<'a> for Child2 {
         type Diff = DeepDiff<'a, Self, Child2Diff<'a>>;
         fn diff(&self, other: &'a Self) -> Self::Diff {
@@ -633,7 +633,7 @@ pub mod tests {
         pub c: <() as Diffable<'a>>::Diff,
     }
 
-    impl<'a> Apply for Child2Diff<'a> {
+    impl Apply for Child2Diff<'_> {
         type Parent = Child2;
 
         fn apply_to_base(&self, source: &mut Self::Parent, errs: &mut Vec<ApplyError>) {
@@ -678,7 +678,7 @@ pub mod tests {
         C2(Box<<Child2 as Diffable<'a>>::Diff>),
     }
 
-    impl<'a> Apply for SomeChildDiff<'a> {
+    impl Apply for SomeChildDiff<'_> {
         type Parent = SomeChild;
 
         fn apply_to_base(&self, source: &mut Self::Parent, errs: &mut Vec<ApplyError>) {

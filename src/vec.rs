@@ -2,7 +2,7 @@
 use similar::algorithms::lcs as diff_algo;
 
 #[cfg(feature = "vec_diff_myers")]
-use similar::algorithms::myers as diff_algo;
+use similar::algorithms::lcs as diff_algo;
 
 use similar::algorithms::{Capture, Compact, Replace as SimilarReplace};
 
@@ -65,7 +65,7 @@ pub enum VecDiff<'a, T, U> {
 mod visitor_impls {
     use crate::{AcceptVisitor, Enter, VecChange, VecDiff};
 
-    impl<'a, T, U> AcceptVisitor for VecDiff<'a, T, U>
+    impl<T, U> AcceptVisitor for VecDiff<'_, T, U>
     where
         T: serde::Serialize,
         U: AcceptVisitor,
@@ -82,7 +82,7 @@ mod visitor_impls {
             }
         }
     }
-    impl<'a, T, U> AcceptVisitor for VecChange<'a, T, U>
+    impl<T, U> AcceptVisitor for VecChange<'_, T, U>
     where
         T: serde::Serialize,
         U: AcceptVisitor,

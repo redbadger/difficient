@@ -1,10 +1,11 @@
-use std::cmp::Ord;
-use std::collections::{BTreeMap, HashMap};
-use std::hash::Hash;
-
-use crate::PatchOnlyDiff;
+use std::{
+    cmp::Ord,
+    collections::{BTreeMap, HashMap},
+    hash::Hash,
+};
 
 use super::{AtomicDiff, DeepDiff, Id, KvDiff, Replace};
+use crate::PatchOnlyDiff;
 
 /// A trait that allows the user to extract information from a 'diff' type.
 /// The visitor will visit the leaves of a diff breadth-first,
@@ -53,7 +54,7 @@ pub enum SerdeVariantTag {
     Untagged,
 }
 
-impl<'a, T> AcceptVisitor for AtomicDiff<'a, T>
+impl<T> AcceptVisitor for AtomicDiff<'_, T>
 where
     T: serde::Serialize,
 {
@@ -65,7 +66,7 @@ where
     }
 }
 
-impl<'a, T, U> AcceptVisitor for DeepDiff<'a, T, U>
+impl<T, U> AcceptVisitor for DeepDiff<'_, T, U>
 where
     T: serde::Serialize,
     U: AcceptVisitor,
@@ -124,7 +125,7 @@ where
 {
     fn accept<V: Visitor>(&self, visitor: &mut V) {
         if !self.is_unchanged() {
-            self.accept(visitor);
+            self.as_ref().accept(visitor);
         }
     }
 }
@@ -196,11 +197,12 @@ kv_map_impl!(BTreeMap, Ord);
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::tests::*;
-    use crate::{Diffable, Replace};
+    use serde::Serialize;
 
-    impl<'a> AcceptVisitor for ParentDiff<'a> {
+    use super::*;
+    use crate::{Diffable, Replace, tests::*};
+
+    impl AcceptVisitor for ParentDiff<'_> {
         fn accept<V: Visitor>(&self, visitor: &mut V) {
             if !self.c1.is_unchanged() {
                 visitor.enter(Enter::NamedField {
@@ -237,7 +239,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> AcceptVisitor for Child1Diff<'a> {
+    impl AcceptVisitor for Child1Diff<'_> {
         fn accept<V: Visitor>(&self, visitor: &mut V) {
             if !self.x.is_unchanged() {
                 visitor.enter(Enter::NamedField {
@@ -258,7 +260,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> AcceptVisitor for Child2Diff<'a> {
+    impl AcceptVisitor for Child2Diff<'_> {
         fn accept<V: Visitor>(&self, visitor: &mut V) {
             if !self.a.is_unchanged() {
                 visitor.enter(Enter::NamedField {
@@ -287,7 +289,7 @@ pub mod tests {
         }
     }
 
-    impl<'a> AcceptVisitor for SomeChildDiff<'a> {
+    impl AcceptVisitor for SomeChildDiff<'_> {
         fn accept<V: Visitor>(&self, visitor: &mut V) {
             match self {
                 SomeChildDiff::C1(c) => {
@@ -450,5 +452,37 @@ pub mod tests {
 
         let expect = [("x", "321"), ("z", "345")];
         emitter.expect_locs(expect);
+    }
+
+    #[derive(Serialize)]
+    struct Replaceable {
+        is_unchanged: bool,
+        is_replaced: bool,
+    }
+
+    impl Replace for Replaceable {
+        fn is_unchanged(&self) -> bool {
+            self.is_unchanged
+        }
+
+        fn is_replaced(&self) -> bool {
+            self.is_replaced
+        }
+    }
+
+    impl AcceptVisitor for Replaceable {
+        fn accept<V: Visitor>(&self, visitor: &mut V) {
+            let _ = visitor;
+        }
+    }
+
+    #[test]
+    fn test_box_visitor() {
+        let sut = Box::new(Replaceable {
+            is_unchanged: false,
+            is_replaced: false,
+        });
+        let mut visitor = Emitter::default();
+        AcceptVisitor::accept(&sut, &mut visitor);
     }
 }
