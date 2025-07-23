@@ -251,28 +251,28 @@ mod tests {
     fn test_atomic_and_skip_enum() {
         // we are really just checking things compile and run here
         let mut c1 = EnumContainsAtomicAndSkip::First;
-        let c2a = EnumContainsAtomicAndSkip::Second(Vec::new(), 123);
-        let c2b = EnumContainsAtomicAndSkip::Second(vec![Unit, Unit], 123);
-        let c3a = EnumContainsAtomicAndSkip::Third {
+        let c2_one = EnumContainsAtomicAndSkip::Second(Vec::new(), 123);
+        let c2_two = EnumContainsAtomicAndSkip::Second(vec![Unit, Unit], 123);
+        let c3_one = EnumContainsAtomicAndSkip::Third {
             w: vec![Unit],
             x: 321,
             y: NotDiffable::X,
             z: 654,
         };
-        let c3b = EnumContainsAtomicAndSkip::Third {
+        let c3_two = EnumContainsAtomicAndSkip::Third {
             w: vec![Unit, Unit, Unit],
             x: 321,
             y: NotDiffable::Y,
             z: 987,
         };
-        for item in &[c2a, c2b, c3a] {
+        for item in &[c2_one, c2_two, c3_one] {
             let diff = c1.diff(item);
             c1.apply(&diff).unwrap();
             assert_eq!(&c1, item);
         }
 
         // c3b is special due to NotDiffable
-        let diff = c1.diff(&c3b);
+        let diff = c1.diff(&c3_two);
         c1.apply(&diff).unwrap();
         assert_eq!(
             c1,
@@ -282,7 +282,7 @@ mod tests {
                 y: NotDiffable::X, // has not changed from c3a
                 z: 987
             }
-        )
+        );
     }
 
     #[derive(Clone, Diffable, PartialEq, Eq)]

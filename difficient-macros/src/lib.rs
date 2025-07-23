@@ -155,9 +155,10 @@ struct DeriveDiffable {
 
 impl DeriveDiffable {
     fn derive(&self, serde_feature: bool, derive_visitor: bool) -> TokenStream {
-        if !self.generics.params.is_empty() {
-            panic!("derive(Diffable) does not support generic parameters")
-        }
+        assert!(
+            self.generics.params.is_empty(),
+            "derive(Diffable) does not support generic parameters"
+        );
 
         let name = &self.ident;
 
@@ -167,9 +168,7 @@ impl DeriveDiffable {
                 Data::Enum(variants) => variants.iter().any(|ed| ed.fields.iter().any(|f| f.skip)),
                 Data::Struct(fields) => fields.iter().any(|f| f.skip),
             };
-            if has_any_skipped_fields {
-                panic!("cannot skip fields in atomic diff");
-            }
+            assert!(!has_any_skipped_fields, "cannot skip fields in atomic diff");
             return quote! {
                 impl<'a> difficient::Diffable<'a> for #name {
                     type Diff = difficient::AtomicDiff<'a, Self>;
@@ -195,12 +194,12 @@ impl DeriveDiffable {
                 let tag = self.serde.variant_tag();
                 enum_impl(
                     variants,
-                    tag,
+                    &tag,
                     name,
-                    diff_ty,
+                    &diff_ty,
                     vis,
-                    serde_derive,
-                    serde_container_rename_all,
+                    serde_derive.as_ref(),
+                    serde_container_rename_all.as_ref(),
                     derive_visitor,
                     self.visit_transparent || self.serde.transparent,
                 )
@@ -208,10 +207,10 @@ impl DeriveDiffable {
             Data::Struct(fields) => struct_impl(
                 fields,
                 name,
-                diff_ty,
+                &diff_ty,
                 vis,
-                serde_derive,
-                serde_container_rename_all,
+                serde_derive.as_ref(),
+                serde_container_rename_all.as_ref(),
                 derive_visitor,
                 self.visit_transparent || self.serde.transparent,
             ),
@@ -237,12 +236,12 @@ impl ToTokens for DeriveDiffable {
 )]
 fn enum_impl(
     variants: &[EnumData],
-    variant_tag: SerdeVariantTag,
+    variant_tag: &SerdeVariantTag,
     name: &Ident,
-    diff_ty: Ident,
+    diff_ty: &Ident,
     vis: &syn::Visibility,
-    serde_derive: Option<TokenStream>,
-    serde_container_rename_all: Option<SerdeRenameAllCase>,
+    serde_derive: Option<&TokenStream>,
+    serde_container_rename_all: Option<&SerdeRenameAllCase>,
     derive_visitor: bool,
     transparent: bool,
 ) -> TokenStream {
@@ -313,7 +312,7 @@ fn enum_impl(
     let variant_diff_impl = variants.iter().zip(var_name.iter()).map(|(var, var_name)| {
         let pattern_match_left = pattern_match(&var.fields, "left", true);
         let pattern_match_right = pattern_match(&var.fields, "right", true);
-        let diff_impl = variant_diff_body(&diff_ty, var_name, &var.fields);
+        let diff_impl = variant_diff_body(diff_ty, var_name, &var.fields);
         quote! {
             (Self::#var_name #pattern_match_left, Self::#var_name #pattern_match_right)  => {
                 #diff_impl
@@ -369,11 +368,13 @@ fn enum_impl(
     let visit_enum_variant_impl = variants.iter().zip(var_name.iter()).map(|(var, var_name)| {
         let ident = get_idents(&var.fields);
         let num_non_skipped_fields = var.fields.iter().filter(|f| !f.skip).count();
+        #[expect(clippy::map_unwrap_or, reason = "more readable this way")]
         let serde_var_rename = var.rename.as_ref().map(|r| quote! { Some(#r) }).unwrap_or_else(||
-            match serde_container_rename_all.as_ref().map(|r| r.do_rename(var_name)) {
-            Some(r) => quote! { Some(#r) },
-            None => quote! { None },
-        });
+            if let Some(r) = serde_container_rename_all.as_ref().map(|r| r.do_rename(var_name)) {
+                quote! { Some(#r) } }
+            else {
+                quote! { None }
+            });
         match var.fields.style {
             Style::Tuple => {
                 if num_non_skipped_fields == 0 {
@@ -420,7 +421,7 @@ fn enum_impl(
                     }
                 }
                 let var_name_str = var_name.to_string();
-                let ident_str = ident.iter().map(|i| i.to_string());
+                let ident_str = ident.iter().map(std::string::ToString::to_string);
                 let var_rename_all: Option<SerdeRenameAllCase> = var.rename_all.as_ref().map(|r| r.parse().unwrap());
                 let serde_field_rename: Vec<_> = var.fields
                     .iter()
@@ -494,10 +495,10 @@ fn enum_impl(
 fn struct_impl(
     fields: &Fields<StructLike>,
     name: &Ident,
-    diff_ty: Ident,
+    diff_ty: &Ident,
     vis: &syn::Visibility,
-    serde_derive: Option<TokenStream>,
-    serde_rename_all: Option<SerdeRenameAllCase>,
+    serde_derive: Option<&TokenStream>,
+    serde_rename_all: Option<&SerdeRenameAllCase>,
     derive_visitor: bool,
     transparent: bool,
 ) -> TokenStream {
@@ -505,9 +506,10 @@ fn struct_impl(
     let num_skipped_fields = fields.iter().filter(|f| f.skip).count();
     let num_non_skipped_fields = fields.iter().filter(|f| !f.skip).count();
 
-    if transparent && num_non_skipped_fields != 1 {
-        panic!("visit_transparent only makes sense when applied to newtypes")
-    }
+    assert!(
+        !(transparent && num_non_skipped_fields != 1),
+        "visit_transparent only makes sense when applied to newtypes"
+    );
 
     if matches!(fields.style, Style::Unit) || num_non_skipped_fields == 0 {
         // short-circuit return
@@ -520,7 +522,7 @@ fn struct_impl(
                 }
             }
         };
-    };
+    }
 
     let field = get_idents(fields);
     let field_diff_ty: Vec<_> = fields
@@ -675,7 +677,7 @@ fn struct_impl(
                 }
             }
             Style::Struct => {
-                let ident_str = ident.iter().map(|i| i.to_string());
+                let ident_str = ident.iter().map(std::string::ToString::to_string);
                 let serde_rename: Vec<_> = fields
                     .iter()
                     .filter(|f| !f.skip)
@@ -911,6 +913,7 @@ fn get_accessors(fields: &Fields<StructLike>, monotonic_index: bool) -> Vec<Toke
         .collect()
 }
 
+#[expect(clippy::missing_panics_doc, reason = "Macro implementation")]
 #[proc_macro_derive(Diffable, attributes(diffable, serde))]
 pub fn derive_diffable(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = syn::parse(tokens).unwrap();
@@ -920,6 +923,7 @@ pub fn derive_diffable(tokens: proc_macro::TokenStream) -> proc_macro::TokenStre
 
 #[cfg(test)]
 mod tests {
+    #![expect(clippy::too_many_lines, reason = "tests")]
     use super::*;
 
     #[test]
@@ -1028,7 +1032,7 @@ mod tests {
 
     #[test]
     fn test_derive_skipped_field() {
-        let input = r#"
+        let input = r"
         #[derive(Diffable)]
         struct SkipStruct {
             x: i32,
@@ -1036,7 +1040,7 @@ mod tests {
             y: String,
             z: u64,
         }
-        "#;
+        ";
         let parsed = syn::parse_str(input).unwrap();
         let diff = DeriveDiffable::from_derive_input(&parsed).unwrap();
 
@@ -1117,10 +1121,10 @@ mod tests {
 
     #[test]
     fn test_derive_tuple_struct() {
-        let input = r#"
+        let input = r"
         #[derive(Diffable)]
         struct TupleStruct(i32, #[diffable(skip)] String, i64, #[diffable(skip)] F);
-        "#;
+        ";
         let parsed = syn::parse_str(input).unwrap();
         let diff = DeriveDiffable::from_derive_input(&parsed).unwrap();
 
@@ -1370,7 +1374,7 @@ mod tests {
 
     #[test]
     fn test_derive_skippable_enum() {
-        let input = r#"
+        let input = r"
         #[derive(Diffable)]
         enum SkipEnum {
             First(#[diffable(skip)] i32, u64),
@@ -1381,7 +1385,7 @@ mod tests {
                 z: String
             }
         }
-        "#;
+        ";
 
         let parsed = syn::parse_str(input).unwrap();
         let diff = DeriveDiffable::from_derive_input(&parsed).unwrap();
@@ -1523,14 +1527,14 @@ mod tests {
 
     #[test]
     fn test_derive_atomic() {
-        let input = r#"
+        let input = r"
         #[derive(Diffable)]
         #[diffable(atomic)]
         enum Atomic {
             First(X),
             Second { x: Y, y: Z }
         }
-        "#;
+        ";
 
         let parsed = syn::parse_str(input).unwrap();
         let diff = DeriveDiffable::from_derive_input(&parsed).unwrap();
@@ -1558,13 +1562,13 @@ mod tests {
 
     #[test]
     fn test_transparent() {
-        let input = r#"
+        let input = r"
         #[derive(Diffable)]
         #[serde(transparent)]
         enum SeeThrough {
             A(X),
         }
-        "#;
+        ";
 
         let parsed = syn::parse_str(input).unwrap();
         let diff = DeriveDiffable::from_derive_input(&parsed).unwrap();
