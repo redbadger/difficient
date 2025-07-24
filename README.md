@@ -1,9 +1,10 @@
-# Difficient
+# Difficient &middot; [![GitHub license](https://img.shields.io/github/license/redbadger/difficient?color=blue)](https://github.com/redbadger/difficient/blob/master/LICENSE) [![Crate version](https://img.shields.io/crates/v/difficient.svg)](https://crates.io/crates/difficient) [![Docs](https://img.shields.io/badge/docs.rs-difficient-green)](https://docs.rs/difficient/) [![Build status](https://img.shields.io/github/actions/workflow/status/redbadger/difficient/ci.yaml)](https://github.com/redbadger/difficient/actions)
+
 Efficient, type-safe, (almost) zero-allocation structural diffing.
 
 * Annotate your `struct` or `enum` with `#[derive(Diffable)]`
 * Diff your value with another value of the same type
-* Apply the diff! 
+* Apply the diff!
 * Serialize the diff!
 * `Visit` the diff, generating a custom stream of change events
 
