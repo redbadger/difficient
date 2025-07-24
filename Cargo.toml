@@ -6,7 +6,7 @@ edition = "2024"
 license = "MIT"
 repository = "http://github.com/redbadger/difficient"
 homepage = "http://github.com/redbadger/difficient"
-keywords = ["derive", "diff", "structural diff"]
+keywords = ["derive", "diff", "structural-diff"]
 
 [package]
 name = "difficient"
