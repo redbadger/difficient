@@ -1,16 +1,23 @@
 [workspace]
 members = ["difficient-macros"]
 
-[package]
-name = "difficient"
-version = "0.1.0"
-description = "Efficient, type-safe, zero-allocation structural diffing"
-edition = "2021"
+[workspace.package]
+edition = "2024"
 license = "MIT"
 repository = "http://github.com/redbadger/difficient"
 homepage = "http://github.com/redbadger/difficient"
 keywords = ["derive", "diff", "structural diff"]
+
+[package]
+name = "difficient"
+version = "0.1.0"
+description = "Efficient, type-safe, zero-allocation structural diffing"
 readme = "README.md"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", optional = true }
