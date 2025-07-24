@@ -16,15 +16,13 @@ impl difficient::Visitor for ChangeEmitter {
         self.location.pop().unwrap();
     }
     fn replaced<T: serde::Serialize>(&mut self, val: T) {
-        use Enter::*;
         let mut path = String::new();
         for (ix, loc) in self.location.iter().enumerate() {
             match loc {
-                NamedField { name, .. } => path.push_str(name),
-                PositionalField(p) => path.push_str(&p.to_string()),
-                Variant { name, .. } => path.push_str(name),
-                MapKey(key) => path.push_str(&key),
-                Index(key) => path.push_str(&key.to_string()),
+                Enter::NamedField { name, .. } | Enter::Variant { name, .. } => path.push_str(name),
+                Enter::PositionalField(p) => path.push_str(&p.to_string()),
+                Enter::MapKey(key) => path.push_str(key),
+                Enter::Index(key) => path.push_str(&key.to_string()),
             }
             if ix != self.location.len() - 1 {
                 path.push('.');
@@ -83,6 +81,6 @@ fn main() {
 
     println!("Changed paths:");
     for (path, val) in emitter.changes {
-        println!("{path}: {val}")
+        println!("{path}: {val}");
     }
 }

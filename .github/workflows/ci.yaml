@@ -1,6 +1,10 @@
-on: [push, pull_request]
-
 name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
   build:
@@ -11,17 +15,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Format check
+        shell: bash
+        run: cargo fmt --all --check
+
+      - name: Clippy (pedantic)
+        shell: bash
+        run: cargo clippy -- --no-deps -Dclippy::pedantic -Dwarnings
+
+      - uses: taiki-e/install-action@cargo-hack
+
       - name: Test
-        run: cargo test --workspace
-
-      - name: Test with serde
-        run: cargo test --workspace --features serde
-
-      - name: Test with features
-        run: cargo test --workspace --features uuid,chrono,visitor
-
-      - name: Test with myers diff algo
-        run: cargo test --workspace --no-default-features --features vec_diff_myers
+        run: cargo hack --each-feature test --workspace
 
       - name: Run example
         run: cargo run --example visitor --features visitor

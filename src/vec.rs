@@ -1,9 +1,3 @@
-#[cfg(feature = "vec_diff_lcs")]
-use similar::algorithms::lcs as diff_algo;
-
-#[cfg(feature = "vec_diff_myers")]
-use similar::algorithms::lcs as diff_algo;
-
 use similar::algorithms::{Capture, Compact, Replace as SimilarReplace};
 
 use crate::{Apply, ApplyError, Diffable, Replace};
@@ -75,7 +69,7 @@ mod visitor_impls {
                 Self::Unchanged => {}
                 Self::Changed { changes } => {
                     for chg in changes {
-                        chg.accept(visitor)
+                        chg.accept(visitor);
                     }
                 }
                 Self::Replaced(r) => visitor.replaced(r),
@@ -90,7 +84,7 @@ mod visitor_impls {
         fn accept<V: crate::Visitor>(&self, visitor: &mut V) {
             match self {
                 VecChange::Remove { at_index, count } => {
-                    visitor.splice::<T>(*at_index, *count, &[])
+                    visitor.splice::<T>(*at_index, *count, &[]);
                 }
                 VecChange::Insert { at_index, values } => visitor.splice(*at_index, 0, values),
                 VecChange::Splice {
@@ -188,6 +182,7 @@ where
 {
     type Diff = VecDiff<'a, T, T::Diff>;
 
+    #[allow(clippy::too_many_lines)]
     fn diff(&self, other: &'a Self) -> Self::Diff {
         if self.is_empty() && other.is_empty() {
             // short circuit
@@ -205,7 +200,21 @@ where
         )]
         let rkeys: Vec<_> = other.iter().map(|v| v.key()).collect();
         let mut d = Compact::new(SimilarReplace::new(Capture::new()), &lkeys, &rkeys);
-        diff_algo::diff(&mut d, &lkeys, 0..lkeys.len(), &rkeys, 0..rkeys.len()).unwrap();
+
+        if cfg!(feature = "vec_diff_myers") {
+            similar::algorithms::myers::diff(
+                &mut d,
+                &lkeys,
+                0..lkeys.len(),
+                &rkeys,
+                0..rkeys.len(),
+            )
+            .unwrap();
+        } else {
+            similar::algorithms::lcs::diff(&mut d, &lkeys, 0..lkeys.len(), &rkeys, 0..rkeys.len())
+                .unwrap();
+        }
+
         let ops = d.into_inner().into_inner().into_ops();
         let n_ops = ops.len();
         let mut offset = 0isize;

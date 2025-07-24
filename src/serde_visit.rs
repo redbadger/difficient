@@ -162,6 +162,10 @@ tuple_impl!(A 0);
 
 macro_rules! kv_map_impl {
     ($typ: ident, $bounds: ident) => {
+        #[allow(
+            clippy::implicit_hasher,
+            reason = "Implementation is shared among HashMap and BTreeMap"
+        )]
         impl<'a, K, V, U> AcceptVisitor for $typ<K, KvDiff<'a, V, U>>
         where
             K: $bounds + ToString + 'a,
@@ -200,7 +204,7 @@ pub mod tests {
     use serde::Serialize;
 
     use super::*;
-    use crate::{Diffable, Replace, tests::*};
+    use crate::{tests::*, Diffable, Replace};
 
     impl AcceptVisitor for ParentDiff<'_> {
         fn accept<V: Visitor>(&self, visitor: &mut V) {
@@ -337,7 +341,7 @@ pub mod tests {
             let loc = self.location.join(".");
             if let Ok(val) = serde_json::to_string(&val) {
                 self.replaced_locs.push((loc, val));
-            };
+            }
         }
 
         fn splice<T: serde::Serialize>(&mut self, from_index: usize, replace: usize, values: &[T]) {
@@ -355,14 +359,15 @@ pub mod tests {
                         values,
                     },
                 ));
-            };
+            }
         }
 
         fn enter(&mut self, val: Enter) {
             match val {
-                Enter::NamedField { name, .. } => self.location.push(name.into()),
                 Enter::PositionalField(p) => self.location.push(p.to_string()),
-                Enter::Variant { name, .. } => self.location.push(name.into()),
+                Enter::NamedField { name, .. } | Enter::Variant { name, .. } => {
+                    self.location.push(name.into());
+                }
                 Enter::MapKey(k) => self.location.push(k),
                 Enter::Index(ix) => self.location.push(ix.to_string()),
             }

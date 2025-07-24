@@ -21,16 +21,23 @@ thiserror = "1.0"
 uuid = { version = "1.11", optional = true }
 
 [features]
-chrono = ["dep:chrono"]  # impl Diffable on `chrono::DateTime`
-uuid = ["dep:uuid"]      # impl Diffable on `uuid::Uuid`
-serde = ["dep:serde", "difficient-macros/serde_impl"]    # add serde derives to derived structs
-visitor = ["serde", "difficient-macros/visitor_impl"] # add AcceptVisitor impl
+# impl Diffable on `chrono::DateTime`
+chrono = ["dep:chrono"]
 
-# choose your vec diff algo
-vec_diff_myers = []   # is generally more efficient
-vec_diff_lcs = []     # can result in smaller diffs in certain circumstances
+# impl Diffable on `uuid::Uuid`
+uuid = ["dep:uuid"]
 
-default = ["vec_diff_lcs"]
+# add serde derives to derived structs
+serde = ["dep:serde", "difficient-macros/serde_impl"]
+
+# add AcceptVisitor impl
+visitor = ["serde", "difficient-macros/visitor_impl"]
+
+# choose your vec diff algorithm:
+# the default is lcs, which can result in smaller diffs in certain circumstances,
+# but you can choose myers instead, which may be more efficient
+vec_diff_myers = []
+
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
