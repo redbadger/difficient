@@ -204,7 +204,7 @@ pub mod tests {
     use serde::Serialize;
 
     use super::*;
-    use crate::{tests::*, Diffable, Replace};
+    use crate::{Diffable, Replace, tests::*};
 
     impl AcceptVisitor for ParentDiff<'_> {
         fn accept<V: Visitor>(&self, visitor: &mut V) {

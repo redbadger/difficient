@@ -44,11 +44,7 @@ pub trait Diffable<'a>: Sized {
     fn apply(&mut self, diff: &Self::Diff) -> Result<(), Vec<ApplyError>> {
         let mut errs = Vec::new();
         diff.apply_to_base(self, &mut errs);
-        if errs.is_empty() {
-            Ok(())
-        } else {
-            Err(errs)
-        }
+        if errs.is_empty() { Ok(()) } else { Err(errs) }
     }
 }
 
