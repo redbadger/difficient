@@ -21,7 +21,7 @@ keywords.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", optional = true }
-difficient-macros = { path = "difficient-macros" }
+difficient-macros = { version = "0.1.0", path = "difficient-macros" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 similar = "2.6.0"
 thiserror = "1.0"
